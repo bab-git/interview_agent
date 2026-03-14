@@ -294,6 +294,79 @@ class Repository:
             ).fetchall()
         return [self._feedback_row_to_dict(row) for row in rows]
 
+    def list_feedback_with_context(
+        self,
+        skill: Optional[str] = None,
+        prompt_version: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        conditions = []
+        params: List[Any] = []
+        if skill:
+            conditions.append("interviews.skill = ?")
+            params.append(skill)
+        if prompt_version:
+            conditions.append("interviews.prompt_version = ?")
+            params.append(prompt_version)
+        if date_from:
+            conditions.append("feedback.created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("feedback.created_at <= ?")
+            params.append(date_to)
+        query = """
+            SELECT
+                feedback.*,
+                interviews.skill AS interview_skill,
+                interviews.prompt_version AS interview_prompt_version,
+                interviews.status AS interview_status
+            FROM feedback
+            JOIN interviews ON interviews.id = feedback.interview_id
+        """
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY feedback.created_at DESC"
+        with self.connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+        items = []
+        for row in rows:
+            feedback = self._feedback_row_to_dict(row)
+            feedback["skill"] = row["interview_skill"]
+            feedback["prompt_version"] = row["interview_prompt_version"]
+            feedback["interview_status"] = row["interview_status"]
+            items.append(feedback)
+        return items
+
+    def comparison_preference_counts(self, left_id: str, right_id: str) -> Dict[str, int]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT preferred_conversation_id
+                FROM feedback
+                WHERE
+                    (interview_id = ? AND comparison_target_id = ?)
+                    OR
+                    (interview_id = ? AND comparison_target_id = ?)
+                """,
+                (left_id, right_id, right_id, left_id),
+            ).fetchall()
+        counts = {
+            "left_preferred": 0,
+            "right_preferred": 0,
+            "no_preference": 0,
+            "total_comparisons": len(rows),
+        }
+        for row in rows:
+            preferred = row["preferred_conversation_id"]
+            if preferred == left_id:
+                counts["left_preferred"] += 1
+            elif preferred == right_id:
+                counts["right_preferred"] += 1
+            else:
+                counts["no_preference"] += 1
+        return counts
+
     def metrics(self) -> Dict[str, Any]:
         with self.connection() as conn:
             totals = conn.execute(
