@@ -214,7 +214,6 @@ Defaults are already wired in code, but you can override them with environment v
 - `APP_DB_PATH`
 - `APP_DATA_DIR`
 - `LLM_BACKEND`
-- `INTERVIEW_ORCHESTRATOR`
 - `OLLAMA_HOST`
 - `OLLAMA_MODEL`
 - `PROMPT_ACTIVE_FILE`
