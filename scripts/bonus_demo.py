@@ -1,3 +1,5 @@
+"""Run an in-process demo of the optional comparison and analytics features."""
+
 from __future__ import annotations
 
 import importlib
@@ -17,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 
 def load_client() -> TestClient:
+    """Create an isolated TestClient configured for the bonus feature demo."""
     temp_dir = tempfile.mkdtemp(prefix="interview-agent-bonus-demo-")
     prompt_src = ROOT / "prompts"
     prompt_dst = Path(temp_dir) / "prompts"
@@ -34,11 +37,13 @@ def load_client() -> TestClient:
 
 
 def pretty_print(title: str, payload: object) -> None:
+    """Print a labeled JSON block for demo readability."""
     print(f"\n=== {title} ===")
     print(json.dumps(payload, indent=2, default=str))
 
 
 def complete_interview(client: TestClient, skill: str, candidate_name: str) -> str:
+    """Run one complete interview and return its identifier."""
     start = client.post("/api/interviews", json={"skill": skill, "candidate_name": candidate_name}).json()
     interview_id = start["id"]
     answers = [
@@ -52,6 +57,7 @@ def complete_interview(client: TestClient, skill: str, candidate_name: str) -> s
 
 
 def main() -> None:
+    """Execute the bonus reviewer workflow for comparison and prompt analytics."""
     with load_client() as client:
         created = client.post(
             "/api/prompts",

@@ -1,3 +1,5 @@
+"""FastAPI application exposing interview, feedback, and prompt-management APIs."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -44,6 +46,7 @@ review_analytics = ReviewAnalyticsService(repository)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """Initialize persistence and prompt state when the API starts."""
     repository.init_db()
     prompt_store.active_version_name()
     yield
@@ -58,12 +61,14 @@ except ImportError:
 
 
 def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    """Convert ISO-8601 text into a datetime object when present."""
     if value is None:
         return None
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _message_response(message: Dict[str, Any]) -> MessageResponse:
+    """Convert a stored message dict into the public response schema."""
     return MessageResponse(
         id=message["id"],
         role=message["role"],
@@ -76,6 +81,7 @@ def _message_response(message: Dict[str, Any]) -> MessageResponse:
 
 
 def _interview_response(interview: Dict[str, Any]) -> InterviewResponse:
+    """Convert a stored interview dict into the public response schema."""
     return InterviewResponse(
         id=interview["id"],
         candidate_name=interview.get("candidate_name"),
@@ -97,6 +103,7 @@ def _interview_response(interview: Dict[str, Any]) -> InterviewResponse:
 
 
 def _feedback_response(feedback: Dict[str, Any]) -> FeedbackResponse:
+    """Convert a stored feedback dict into the public response schema."""
     return FeedbackResponse(
         id=feedback["id"],
         interview_id=feedback["interview_id"],
@@ -113,6 +120,7 @@ def _feedback_response(feedback: Dict[str, Any]) -> FeedbackResponse:
 
 
 def _evaluation_response(evaluation: EvaluationResult) -> Dict[str, Any]:
+    """Convert an engine evaluation result into an API-friendly payload."""
     return {
         "verdict": evaluation.verdict,
         "score": evaluation.score,
@@ -125,6 +133,7 @@ def _evaluation_response(evaluation: EvaluationResult) -> Dict[str, Any]:
 
 
 def _ensure_interview_exists(interview_id: str) -> Dict[str, Any]:
+    """Load an interview or raise an HTTP 404 if it does not exist."""
     try:
         return repository.get_interview(interview_id)
     except KeyError as exc:
@@ -132,6 +141,7 @@ def _ensure_interview_exists(interview_id: str) -> Dict[str, Any]:
 
 
 def _ensure_completed_interview(interview_id: str) -> Dict[str, Any]:
+    """Load an interview and require it to be completed for reviewer actions."""
     interview = _ensure_interview_exists(interview_id)
     if interview["status"] != "completed":
         raise HTTPException(status_code=409, detail="interview must be completed for this action")
@@ -140,6 +150,7 @@ def _ensure_completed_interview(interview_id: str) -> Dict[str, Any]:
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    """Report service health, prompt version, and backend reachability."""
     repository.init_db()
     prompt = prompt_store.load_active()
     return HealthResponse(
@@ -153,11 +164,13 @@ def health() -> HealthResponse:
 
 @app.get("/api/metrics", response_model=MetricsResponse)
 def metrics() -> MetricsResponse:
+    """Return aggregate operational metrics for interviews and reply latency."""
     return MetricsResponse(**repository.metrics())
 
 
 @app.get("/api/prompts", response_model=List[PromptVersionResponse])
 def list_prompts() -> List[PromptVersionResponse]:
+    """List all available prompt versions and identify the active one."""
     active = prompt_store.active_version_name()
     return [
         PromptVersionResponse(
@@ -171,6 +184,7 @@ def list_prompts() -> List[PromptVersionResponse]:
 
 @app.post("/api/prompts/activate", response_model=PromptVersionResponse)
 def activate_prompt(request: ActivatePromptRequest) -> PromptVersionResponse:
+    """Activate an existing prompt version for new interviews."""
     try:
         prompt = prompt_store.activate(request.version)
     except FileNotFoundError as exc:
@@ -184,6 +198,7 @@ def activate_prompt(request: ActivatePromptRequest) -> PromptVersionResponse:
 
 @app.post("/api/prompts", response_model=PromptVersionResponse)
 def create_prompt(request: CreatePromptVersionRequest) -> PromptVersionResponse:
+    """Create a new prompt version by patching a base prompt definition."""
     payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
     try:
         prompt = prompt_store.create_version(payload)
@@ -202,6 +217,7 @@ def create_prompt(request: CreatePromptVersionRequest) -> PromptVersionResponse:
 
 @app.post("/api/interviews", response_model=InterviewResponse)
 def start_interview(request: StartInterviewRequest) -> InterviewResponse:
+    """Start a new interview for the selected skill."""
     interview = engine.start_interview(request.skill.value, request.candidate_name)
     return _interview_response(interview)
 
@@ -215,6 +231,7 @@ def list_interviews(
     date_to: Optional[str] = Query(default=None),
     prompt_version: Optional[str] = Query(default=None),
 ) -> List[InterviewResponse]:
+    """List interviews with optional filters for review and prompt analysis."""
     interviews = repository.list_interviews(
         skill=skill,
         status=status,
@@ -228,6 +245,7 @@ def list_interviews(
 
 @app.get("/api/interviews/{interview_id}", response_model=InterviewResponse)
 def get_interview(interview_id: str) -> InterviewResponse:
+    """Return the full stored state and transcript for one interview."""
     try:
         interview = engine.get_interview(interview_id)
     except KeyError as exc:
@@ -237,6 +255,7 @@ def get_interview(interview_id: str) -> InterviewResponse:
 
 @app.post("/api/interviews/{interview_id}/reply", response_model=ReplyResponse)
 def reply(interview_id: str, request: ReplyRequest) -> ReplyResponse:
+    """Submit one candidate answer and return the resulting state transition."""
     try:
         response = engine.reply(interview_id, request.content)
     except KeyError as exc:
@@ -252,6 +271,7 @@ def reply(interview_id: str, request: ReplyRequest) -> ReplyResponse:
 
 @app.post("/api/feedback", response_model=FeedbackResponse)
 def submit_feedback(request: FeedbackSubmissionRequest) -> FeedbackResponse:
+    """Persist reviewer ratings and optional flags for a completed interview."""
     interview = _ensure_completed_interview(request.interview_id)
     if bool(request.comparison_target_id) != bool(request.preferred_conversation_id):
         raise HTTPException(
@@ -273,6 +293,7 @@ def submit_feedback(request: FeedbackSubmissionRequest) -> FeedbackResponse:
 
 @app.get("/api/interviews/{interview_id}/feedback", response_model=List[FeedbackResponse])
 def list_feedback(interview_id: str) -> List[FeedbackResponse]:
+    """Return all feedback records associated with one interview."""
     _ensure_interview_exists(interview_id)
     feedback_items = repository.list_feedback(interview_id)
     return [_feedback_response(item) for item in feedback_items]
@@ -283,6 +304,7 @@ def compare_interviews(
     left_id: str = Query(...),
     right_id: str = Query(...),
 ) -> ComparisonResponse:
+    """Return two completed interviews side by side with preference totals."""
     left = engine.get_interview(_ensure_completed_interview(left_id)["id"])
     right = engine.get_interview(_ensure_completed_interview(right_id)["id"])
     counts = repository.comparison_preference_counts(left_id, right_id)
@@ -297,6 +319,7 @@ def compare_interviews(
 
 @app.post("/api/comparisons/feedback", response_model=FeedbackResponse)
 def submit_comparison_feedback(request: ComparisonFeedbackRequest) -> FeedbackResponse:
+    """Persist reviewer preference data for a pairwise conversation comparison."""
     left = _ensure_completed_interview(request.left_interview_id)
     _ensure_completed_interview(request.right_interview_id)
     if request.preferred_conversation_id not in {
@@ -329,6 +352,7 @@ def feedback_summary(
     date_from: Optional[str] = Query(default=None),
     date_to: Optional[str] = Query(default=None),
 ) -> FeedbackSummaryResponse:
+    """Return aggregate reviewer feedback metrics across filtered interviews."""
     return FeedbackSummaryResponse(
         **review_analytics.feedback_summary(
             skill=skill,
@@ -344,6 +368,7 @@ def prompt_suggestions(
     skill: Optional[str] = Query(default=None),
     prompt_version: Optional[str] = Query(default=None),
 ) -> List[PromptSuggestionResponse]:
+    """Return prompt-improvement suggestions derived from reviewer feedback."""
     suggestions = review_analytics.prompt_suggestions(skill=skill, prompt_version=prompt_version)
     return [PromptSuggestionResponse(**item) for item in suggestions]
 

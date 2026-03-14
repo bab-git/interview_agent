@@ -1,3 +1,5 @@
+"""Prompt version loading, activation, and creation helpers."""
+
 from __future__ import annotations
 
 import copy
@@ -13,33 +15,42 @@ from app.config import Settings
 
 @dataclass(frozen=True)
 class PromptVersion:
+    """An immutable prompt definition loaded from disk."""
+
     version: str
     description: str
     raw: Dict[str, Any]
 
     @property
     def max_clarifications(self) -> int:
+        """Return the maximum clarification attempts allowed per question."""
         return int(self.raw.get("clarification", {}).get("max_attempts", 1))
 
     def welcome_message(self, skill: str) -> str:
+        """Render the welcome template for a selected skill."""
         template = self.raw["welcome_template"]
         return template.format(skill=skill)
 
     def wrap_up_message(self, skill: str) -> str:
+        """Render the wrap-up template for a selected skill."""
         template = self.raw["wrap_up_template"]
         return template.format(skill=skill)
 
     def skill_questions(self, skill: str) -> List[Dict[str, Any]]:
+        """Return the configured question set for one skill."""
         return self.raw["skills"][skill]["questions"]
 
 
 class PromptStore:
+    """Manage versioned prompt files and the active prompt pointer."""
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.settings.prompt_versions_dir.mkdir(parents=True, exist_ok=True)
         self.settings.prompt_active_file.parent.mkdir(parents=True, exist_ok=True)
 
     def list_versions(self) -> List[PromptVersion]:
+        """Return every prompt version available on disk."""
         active = self.active_version_name()
         versions: List[PromptVersion] = []
         for path in sorted(self.settings.prompt_versions_dir.glob("*.yaml")):
@@ -54,9 +65,11 @@ class PromptStore:
         return versions
 
     def load_active(self) -> PromptVersion:
+        """Load the prompt version currently marked as active."""
         return self.load_version(self.active_version_name())
 
     def active_version_name(self) -> str:
+        """Return the active prompt version, creating a default if needed."""
         if not self.settings.prompt_active_file.exists():
             available = sorted(self.settings.prompt_versions_dir.glob("*.yaml"))
             if not available:
@@ -68,6 +81,7 @@ class PromptStore:
         return data["active_version"]
 
     def activate(self, version: str) -> PromptVersion:
+        """Persist a prompt version as the one used for new interviews."""
         prompt = self.load_version(version)
         self.settings.prompt_active_file.write_text(
             json.dumps({"active_version": prompt.version}, indent=2) + "\n"
@@ -75,6 +89,7 @@ class PromptStore:
         return prompt
 
     def create_version(self, request: Dict[str, Any]) -> PromptVersion:
+        """Create a new prompt version by copying and patching an existing one."""
         version = request["version"]
         path = self.settings.prompt_versions_dir / f"{version}.yaml"
         if path.exists():
@@ -123,6 +138,7 @@ class PromptStore:
         return prompt
 
     def load_version(self, version: str) -> PromptVersion:
+        """Load one named prompt version from the versions directory."""
         path = self.settings.prompt_versions_dir / f"{version}.yaml"
         if not path.exists():
             raise FileNotFoundError(f"prompt version {version} not found")

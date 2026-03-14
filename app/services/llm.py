@@ -1,3 +1,5 @@
+"""LLM backend adapters used by the interview engine."""
+
 from __future__ import annotations
 
 import json
@@ -12,24 +14,33 @@ from app.logging_utils import log_event
 
 @dataclass
 class LLMResult:
+    """Normalized response returned by an LLM backend."""
+
     content: str
     backend: str
     used_fallback: bool = False
 
 
 class LLMBackend:
+    """Abstract interface for answer-evaluation backends."""
+
     def complete(self, system_prompt: str, user_prompt: str) -> LLMResult:
+        """Return a model completion for the supplied prompts."""
         raise NotImplementedError
 
     def is_reachable(self) -> Optional[bool]:
+        """Report whether the backend appears reachable, if detectable."""
         return None
 
 
 class OllamaBackend(LLMBackend):
+    """LLM backend that evaluates answers through a local Ollama service."""
+
     def __init__(self, settings: Settings):
         self.settings = settings
 
     def complete(self, system_prompt: str, user_prompt: str) -> LLMResult:
+        """Send a structured evaluation request to the configured Ollama model."""
         payload = json.dumps(
             {
                 "model": self.settings.ollama_model,
@@ -60,6 +71,7 @@ class OllamaBackend(LLMBackend):
         return LLMResult(content=content, backend=f"ollama:{self.settings.ollama_model}")
 
     def is_reachable(self) -> Optional[bool]:
+        """Check whether the configured Ollama instance responds to a tags query."""
         request = urllib.request.Request(f"{self.settings.ollama_host}/api/tags", method="GET")
         try:
             with urllib.request.urlopen(request, timeout=3):
@@ -69,7 +81,10 @@ class OllamaBackend(LLMBackend):
 
 
 class MockBackend(LLMBackend):
+    """Deterministic backend used for tests and reviewer demos."""
+
     def complete(self, system_prompt: str, user_prompt: str) -> LLMResult:
+        """Return a predictable clarify-or-complete judgment from the answer length."""
         try:
             payload = json.loads(user_prompt)
         except json.JSONDecodeError:
@@ -95,10 +110,12 @@ class MockBackend(LLMBackend):
         return LLMResult(content=json.dumps(content), backend="mock")
 
     def is_reachable(self) -> Optional[bool]:
+        """Always report reachable for the in-process mock backend."""
         return True
 
 
 def build_llm_backend(settings: Settings) -> LLMBackend:
+    """Create the configured LLM backend implementation."""
     if settings.llm_backend == "mock":
         return MockBackend()
     return OllamaBackend(settings)

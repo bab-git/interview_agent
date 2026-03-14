@@ -1,3 +1,5 @@
+"""SQLite persistence layer for interviews, transcripts, feedback, and metrics."""
+
 from __future__ import annotations
 
 import json
@@ -12,14 +14,18 @@ from app.config import Settings
 
 
 def utc_now() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime."""
     return datetime.now(timezone.utc)
 
 
 def utc_now_text() -> str:
+    """Return the current UTC time in ISO-8601 text form."""
     return utc_now().isoformat()
 
 
 class Repository:
+    """Encapsulate all SQLite reads and writes for the application."""
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -27,6 +33,7 @@ class Repository:
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
+        """Yield a SQLite connection with row access and auto-commit semantics."""
         conn = sqlite3.connect(self.settings.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -37,6 +44,7 @@ class Repository:
             conn.close()
 
     def init_db(self) -> None:
+        """Create the database schema if it does not already exist."""
         with self.connection() as conn:
             conn.executescript(
                 """
@@ -87,6 +95,7 @@ class Repository:
             )
 
     def create_interview(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert a new interview record and return the stored representation."""
         interview_id = payload.get("id") or str(uuid.uuid4())
         now = utc_now_text()
         record = {
@@ -128,6 +137,7 @@ class Repository:
         return self.get_interview(interview_id)
 
     def update_interview(self, interview_id: str, **changes: Any) -> Dict[str, Any]:
+        """Apply partial updates to an interview and return the refreshed record."""
         changes["updated_at"] = utc_now_text()
         assignments = ", ".join(f"{column} = :{column}" for column in changes)
         params = dict(changes)
@@ -137,6 +147,7 @@ class Repository:
         return self.get_interview(interview_id)
 
     def append_latency(self, interview_id: str, latency_ms: float) -> None:
+        """Accumulate reply-evaluation latency metrics for an interview."""
         with self.connection() as conn:
             conn.execute(
                 """
@@ -158,6 +169,7 @@ class Repository:
         question_index: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        """Persist one transcript message and return the stored message."""
         record = {
             "id": str(uuid.uuid4()),
             "interview_id": interview_id,
@@ -182,6 +194,7 @@ class Repository:
         return self.get_message(record["id"])
 
     def get_message(self, message_id: str) -> Dict[str, Any]:
+        """Load a single transcript message by identifier."""
         with self.connection() as conn:
             row = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
         if row is None:
@@ -189,6 +202,7 @@ class Repository:
         return self._message_row_to_dict(row)
 
     def get_interview(self, interview_id: str) -> Dict[str, Any]:
+        """Load one interview record by identifier."""
         with self.connection() as conn:
             row = conn.execute("SELECT * FROM interviews WHERE id = ?", (interview_id,)).fetchone()
         if row is None:
@@ -196,6 +210,7 @@ class Repository:
         return self._interview_row_to_dict(row)
 
     def list_messages(self, interview_id: str) -> List[Dict[str, Any]]:
+        """Return a transcript ordered by message creation time."""
         with self.connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM messages WHERE interview_id = ? ORDER BY created_at ASC",
@@ -212,6 +227,7 @@ class Repository:
         date_to: Optional[str] = None,
         prompt_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """List interviews filtered by reviewer and prompt-related dimensions."""
         conditions = []
         params: List[Any] = []
         if skill:
@@ -243,6 +259,7 @@ class Repository:
         return [self._interview_row_to_dict(row) for row in rows]
 
     def feedback_count(self, interview_id: str) -> int:
+        """Return how many feedback entries exist for one interview."""
         with self.connection() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) AS count FROM feedback WHERE interview_id = ?",
@@ -251,6 +268,7 @@ class Repository:
         return int(row["count"])
 
     def create_feedback(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert reviewer feedback and return the persisted feedback record."""
         record = {
             "id": str(uuid.uuid4()),
             "interview_id": payload["interview_id"],
@@ -280,6 +298,7 @@ class Repository:
         return self.get_feedback(record["id"])
 
     def get_feedback(self, feedback_id: str) -> Dict[str, Any]:
+        """Load one feedback record by identifier."""
         with self.connection() as conn:
             row = conn.execute("SELECT * FROM feedback WHERE id = ?", (feedback_id,)).fetchone()
         if row is None:
@@ -287,6 +306,7 @@ class Repository:
         return self._feedback_row_to_dict(row)
 
     def list_feedback(self, interview_id: str) -> List[Dict[str, Any]]:
+        """List feedback entries associated with one interview."""
         with self.connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM feedback WHERE interview_id = ? ORDER BY created_at DESC",
@@ -301,6 +321,7 @@ class Repository:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """List feedback joined with interview metadata for analytics queries."""
         conditions = []
         params: List[Any] = []
         if skill:
@@ -339,6 +360,7 @@ class Repository:
         return items
 
     def comparison_preference_counts(self, left_id: str, right_id: str) -> Dict[str, int]:
+        """Summarize reviewer preferences across a pair of interviews."""
         with self.connection() as conn:
             rows = conn.execute(
                 """
@@ -368,6 +390,7 @@ class Repository:
         return counts
 
     def metrics(self) -> Dict[str, Any]:
+        """Return top-level interview volume, completion, and latency metrics."""
         with self.connection() as conn:
             totals = conn.execute(
                 """

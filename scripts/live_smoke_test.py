@@ -1,3 +1,5 @@
+"""Run a live HTTP smoke test against a running interview-agent server."""
+
 from __future__ import annotations
 
 import argparse
@@ -7,11 +9,13 @@ import httpx
 
 
 def assert_status(response: httpx.Response, expected: int) -> None:
+    """Raise a readable assertion when an HTTP response code is unexpected."""
     if response.status_code != expected:
         raise AssertionError(f"Expected {expected}, got {response.status_code}: {response.text}")
 
 
 def main() -> None:
+    """Exercise the public API end to end against a running server."""
     parser = argparse.ArgumentParser(description="Run a live smoke test against the interview agent API.")
     parser.add_argument("--base-url", required=True)
     args = parser.parse_args()

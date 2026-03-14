@@ -1,3 +1,5 @@
+"""Pydantic request and response models for the public API."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -9,19 +11,27 @@ from app.models import InterviewPhase, InterviewStatus, Skill
 
 
 class StartInterviewRequest(BaseModel):
+    """Payload for creating a new interview session."""
+
     skill: Skill
     candidate_name: Optional[str] = None
 
 
 class ReplyRequest(BaseModel):
+    """Payload for submitting a candidate reply."""
+
     content: str = Field(min_length=1)
 
 
 class ActivatePromptRequest(BaseModel):
+    """Payload for switching the active prompt version."""
+
     version: str = Field(min_length=1)
 
 
 class PromptQuestionOverride(BaseModel):
+    """Partial update for a single question inside a prompt version."""
+
     id: str = Field(min_length=1)
     prompt: Optional[str] = None
     fallback_probe: Optional[str] = None
@@ -29,6 +39,8 @@ class PromptQuestionOverride(BaseModel):
 
 
 class CreatePromptVersionRequest(BaseModel):
+    """Payload for creating a derived prompt version."""
+
     version: str = Field(min_length=1)
     description: str = Field(min_length=1)
     base_version: Optional[str] = None
@@ -41,6 +53,8 @@ class CreatePromptVersionRequest(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    """Serialized transcript message returned by the API."""
+
     id: str
     role: str
     kind: str
@@ -51,6 +65,8 @@ class MessageResponse(BaseModel):
 
 
 class EvaluationResponse(BaseModel):
+    """Structured evaluation output for a candidate answer."""
+
     verdict: str
     score: int
     reasoning: str
@@ -61,6 +77,8 @@ class EvaluationResponse(BaseModel):
 
 
 class InterviewResponse(BaseModel):
+    """Serialized interview state and transcript."""
+
     id: str
     candidate_name: Optional[str] = None
     skill: Skill
@@ -80,12 +98,16 @@ class InterviewResponse(BaseModel):
 
 
 class ReplyResponse(BaseModel):
+    """Response returned after evaluating a candidate reply."""
+
     interview: InterviewResponse
     evaluation: EvaluationResponse
     agent_message: MessageResponse
 
 
 class FeedbackSubmissionRequest(BaseModel):
+    """Payload for reviewer ratings and issue flags."""
+
     interview_id: str
     evaluator_id: Optional[str] = None
     overall_quality: int = Field(ge=1, le=5)
@@ -98,6 +120,8 @@ class FeedbackSubmissionRequest(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
+    """Persisted reviewer feedback returned by the API."""
+
     id: str
     interview_id: str
     evaluator_id: Optional[str] = None
@@ -112,12 +136,16 @@ class FeedbackResponse(BaseModel):
 
 
 class PromptVersionResponse(BaseModel):
+    """Prompt version metadata shown to reviewers and operators."""
+
     version: str
     description: str
     is_active: bool
 
 
 class PreferenceCountsResponse(BaseModel):
+    """Aggregate preference counts for A/B conversation comparisons."""
+
     left_preferred: int
     right_preferred: int
     no_preference: int
@@ -125,6 +153,8 @@ class PreferenceCountsResponse(BaseModel):
 
 
 class ComparisonResponse(BaseModel):
+    """Two completed interviews shown side by side for reviewer comparison."""
+
     left: InterviewResponse
     right: InterviewResponse
     same_skill: bool
@@ -133,6 +163,8 @@ class ComparisonResponse(BaseModel):
 
 
 class ComparisonFeedbackRequest(BaseModel):
+    """Payload for recording a reviewer preference between two interviews."""
+
     left_interview_id: str
     right_interview_id: str
     preferred_conversation_id: str
@@ -145,6 +177,8 @@ class ComparisonFeedbackRequest(BaseModel):
 
 
 class AggregationBucketResponse(BaseModel):
+    """Grouped feedback metrics for one skill or prompt version."""
+
     key: str
     feedback_count: int
     average_quality: float
@@ -153,11 +187,15 @@ class AggregationBucketResponse(BaseModel):
 
 
 class FlagCountResponse(BaseModel):
+    """Count of how often a feedback flag appears."""
+
     flag: str
     count: int
 
 
 class FeedbackSummaryResponse(BaseModel):
+    """Aggregate review metrics across interviews."""
+
     total_feedback: int
     reviewed_interviews: int
     average_quality: float
@@ -169,6 +207,8 @@ class FeedbackSummaryResponse(BaseModel):
 
 
 class PromptSuggestionResponse(BaseModel):
+    """Suggested prompt change derived from reviewer feedback."""
+
     title: str
     priority: str
     target_scope: str
@@ -177,6 +217,8 @@ class PromptSuggestionResponse(BaseModel):
 
 
 class MetricsResponse(BaseModel):
+    """Top-level operational metrics exposed by the service."""
+
     total_interviews: int
     completed_interviews: int
     active_interviews: int
@@ -185,6 +227,8 @@ class MetricsResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """Health status for the API, persistence, and LLM reachability."""
+
     status: str
     database_path: str
     prompt_version: str

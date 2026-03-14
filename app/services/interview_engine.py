@@ -1,3 +1,5 @@
+"""Stateful interview orchestration for asking, evaluating, and advancing."""
+
 from __future__ import annotations
 
 import json
@@ -13,6 +15,8 @@ from app.services.llm import LLMBackend
 
 @dataclass
 class EvaluationResult:
+    """Normalized evaluation output used by the engine and API layer."""
+
     verdict: str
     score: int
     reasoning: str
@@ -23,6 +27,8 @@ class EvaluationResult:
 
 
 class InterviewEngine:
+    """Coordinate interview state transitions, transcript storage, and evaluation."""
+
     def __init__(
         self,
         repository: Repository,
@@ -34,6 +40,7 @@ class InterviewEngine:
         self.llm_backend = llm_backend
 
     def start_interview(self, skill: str, candidate_name: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new interview, persist its initial state, and ask question one."""
         prompt = self.prompt_store.load_active()
         questions = prompt.skill_questions(skill)[:3]
         interview = self.repository.create_interview(
@@ -67,12 +74,14 @@ class InterviewEngine:
         return self.get_interview(interview["id"])
 
     def get_interview(self, interview_id: str) -> Dict[str, Any]:
+        """Load an interview together with its transcript and feedback count."""
         interview = self.repository.get_interview(interview_id)
         interview["messages"] = self.repository.list_messages(interview_id)
         interview["feedback_count"] = self.repository.feedback_count(interview_id)
         return interview
 
     def reply(self, interview_id: str, content: str) -> Dict[str, Any]:
+        """Store a candidate reply, evaluate it, and advance the state machine."""
         interview = self.repository.get_interview(interview_id)
         if interview["status"] != InterviewStatus.ACTIVE.value:
             raise ValueError("interview is not active")
@@ -175,6 +184,7 @@ class InterviewEngine:
         question: Dict[str, Any],
         answer: str,
     ) -> EvaluationResult:
+        """Evaluate one answer with the configured LLM and a heuristic fallback."""
         heuristic = self._heuristic_evaluation(question, answer)
         system_prompt = prompt.raw["evaluation"]["system_prompt"]
         user_prompt = json.dumps(
@@ -213,6 +223,7 @@ class InterviewEngine:
             )
 
     def _heuristic_evaluation(self, question: Dict[str, Any], answer: str) -> Dict[str, Any]:
+        """Provide a deterministic backup evaluator when the LLM path fails."""
         stripped = answer.strip()
         word_count = len([token for token in stripped.split() if token])
         focus = question["evaluation_focus"]

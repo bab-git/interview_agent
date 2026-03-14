@@ -1,3 +1,5 @@
+"""Application configuration loaded from environment variables."""
+
 from __future__ import annotations
 
 import os
@@ -10,6 +12,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 @dataclass(frozen=True)
 class Settings:
+    """Runtime settings shared across the API, storage, and LLM layers."""
+
     root_dir: Path
     data_dir: Path
     db_path: Path
@@ -22,6 +26,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        """Build a settings object from environment variables and defaults."""
         data_dir = Path(os.getenv("APP_DATA_DIR", ROOT_DIR / "data"))
         db_path = Path(os.getenv("APP_DB_PATH", data_dir / "interview_agent.sqlite3"))
         prompt_active_file = Path(

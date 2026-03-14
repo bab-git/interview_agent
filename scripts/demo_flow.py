@@ -1,3 +1,5 @@
+"""Run an end-to-end in-process demo of the core reviewer workflow."""
+
 from __future__ import annotations
 
 import importlib
@@ -17,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 
 def load_client() -> TestClient:
+    """Create a demo-scoped TestClient with isolated data and mock LLM settings."""
     temp_dir = tempfile.mkdtemp(prefix="interview-agent-demo-")
     prompt_src = ROOT / "prompts"
     prompt_dst = Path(temp_dir) / "prompts"
@@ -34,11 +37,13 @@ def load_client() -> TestClient:
 
 
 def pretty_print(title: str, payload: object) -> None:
+    """Print a labeled JSON block for demo readability."""
     print(f"\n=== {title} ===")
     print(json.dumps(payload, indent=2, default=str))
 
 
 def main() -> None:
+    """Execute the required assignment flow from interview to prompt update."""
     with load_client() as client:
         prompt_list = client.get("/api/prompts")
         pretty_print("Available Prompt Versions", prompt_list.json())

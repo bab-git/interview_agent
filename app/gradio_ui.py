@@ -1,3 +1,5 @@
+"""Mounted Gradio interface for live interview demos and reviewer workflows."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,16 +22,19 @@ FLAG_OPTIONS = [
 
 
 def _skill_options() -> List[str]:
+    """Return display labels for all supported skills."""
     return [skill.value for skill in Skill]
 
 
 def _format_timestamp(value: Optional[str]) -> str:
+    """Render timestamps in a reviewer-friendly format."""
     if not value:
         return "-"
     return value.replace("T", " ").replace("+00:00", " UTC")
 
 
 def _chat_history(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Convert stored transcript messages into Gradio chat history items."""
     history: List[Dict[str, str]] = []
     for message in messages:
         if message["role"] == MessageRole.CANDIDATE.value:
@@ -40,6 +45,7 @@ def _chat_history(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
 
 
 def _last_evaluation_message(messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Return the latest system evaluation message in a transcript."""
     for message in reversed(messages):
         if message["role"] == MessageRole.SYSTEM.value and message["kind"] == MessageKind.EVALUATION.value:
             return message
@@ -47,6 +53,7 @@ def _last_evaluation_message(messages: List[Dict[str, Any]]) -> Optional[Dict[st
 
 
 def _format_state(interview: Dict[str, Any]) -> str:
+    """Build the markdown block summarizing the live interview state."""
     total_questions = len(interview["question_set"])
     current_index = interview["current_question_index"] + 1
     current_prompt = ""
@@ -73,6 +80,7 @@ def _format_state(interview: Dict[str, Any]) -> str:
 
 
 def _format_transcript(messages: List[Dict[str, Any]]) -> str:
+    """Render the full transcript, including evaluation metadata, as markdown."""
     if not messages:
         return "_No messages yet._"
     blocks: List[str] = []
@@ -95,6 +103,7 @@ def _format_transcript(messages: List[Dict[str, Any]]) -> str:
 
 
 def _format_evaluation(messages: List[Dict[str, Any]]) -> str:
+    """Render the latest evaluation decision for the side panel."""
     evaluation = _last_evaluation_message(messages)
     if evaluation is None:
         return "_No evaluation yet. Submit an answer to see the latest scoring decision._"
@@ -115,6 +124,7 @@ def _format_evaluation(messages: List[Dict[str, Any]]) -> str:
 
 
 def _format_system_snapshot(prompt_store: PromptStore, review_analytics: ReviewAnalyticsService) -> str:
+    """Render a brief system summary for the reviewer workbench."""
     review_analytics.repository.init_db()
     prompt = prompt_store.load_active()
     metrics = review_analytics.repository.metrics()
@@ -132,6 +142,7 @@ def _format_system_snapshot(prompt_store: PromptStore, review_analytics: ReviewA
 
 
 def _interview_label(interview: Dict[str, Any]) -> str:
+    """Build a compact dropdown label for a stored interview."""
     return (
         f"{interview['id'][:8]} | {interview['skill']} | {interview['status']} | "
         f"{interview['prompt_version']} | feedback {interview.get('feedback_count', 0)}"
@@ -139,6 +150,7 @@ def _interview_label(interview: Dict[str, Any]) -> str:
 
 
 def _reviewed_filter_value(selection: str) -> Optional[bool]:
+    """Map UI filter labels to the reviewed query parameter values."""
     if selection == "reviewed":
         return True
     if selection == "unreviewed":
@@ -147,6 +159,7 @@ def _reviewed_filter_value(selection: str) -> Optional[bool]:
 
 
 def _feedback_summary_markdown(review_analytics: ReviewAnalyticsService) -> str:
+    """Render aggregate feedback metrics as markdown for the UI."""
     summary = review_analytics.feedback_summary()
     common_flags = ", ".join(f"{item['flag']} ({item['count']})" for item in summary["common_flags"]) or "none"
     return "\n".join(
@@ -163,6 +176,7 @@ def _feedback_summary_markdown(review_analytics: ReviewAnalyticsService) -> str:
 
 
 def _prompt_suggestions_markdown(review_analytics: ReviewAnalyticsService) -> str:
+    """Render prompt suggestions as reviewer-friendly markdown."""
     suggestions = review_analytics.prompt_suggestions()
     if not suggestions:
         return "_No prompt suggestions yet. Add reviewer feedback to unlock improvement ideas._"
@@ -188,6 +202,7 @@ def _interview_snapshot(
     prompt_store: PromptStore,
     review_analytics: ReviewAnalyticsService,
 ) -> Tuple[List[Dict[str, str]], str, str, str, str]:
+    """Assemble all UI fragments needed to display an interview session."""
     messages = interview.get("messages", [])
     return (
         _chat_history(messages),
@@ -204,6 +219,7 @@ def mount_gradio_ui(
     prompt_store: PromptStore,
     review_analytics: ReviewAnalyticsService,
 ) -> FastAPI:
+    """Mount the Gradio demo and reviewer UI onto the FastAPI application."""
     import gradio as gr
 
     def start_live_interview(skill, candidate_name):

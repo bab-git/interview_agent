@@ -1,3 +1,5 @@
+"""Feedback aggregation and prompt-improvement suggestion helpers."""
+
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -7,10 +9,13 @@ from app.db import Repository
 
 
 def _average(total: float, count: int) -> float:
+    """Safely compute a rounded average for feedback aggregates."""
     return round((total / count) if count else 0.0, 2)
 
 
 class ReviewAnalyticsService:
+    """Compute reviewer-facing summaries and prompt suggestions from feedback."""
+
     def __init__(self, repository: Repository):
         self.repository = repository
 
@@ -21,6 +26,7 @@ class ReviewAnalyticsService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Aggregate feedback counts, averages, and top flags for a filter set."""
         rows = self.repository.list_feedback_with_context(
             skill=skill,
             prompt_version=prompt_version,
@@ -94,6 +100,7 @@ class ReviewAnalyticsService:
         skill: Optional[str] = None,
         prompt_version: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """Draft prompt-improvement suggestions from reviewer feedback patterns."""
         summary = self.feedback_summary(skill=skill, prompt_version=prompt_version)
         scope = skill or prompt_version or "global"
         suggestions: List[Dict[str, Any]] = []
