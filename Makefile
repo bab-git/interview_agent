@@ -4,7 +4,7 @@ PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/pytest
 UVICORN := $(VENV)/bin/uvicorn
 
-.PHONY: install run test demo smoke format
+.PHONY: install run test demo smoke bonus-demo format
 
 install:
 	$(PYTHON) -m venv $(VENV)
@@ -22,3 +22,6 @@ demo:
 
 smoke:
 	$(VENV)/bin/python scripts/live_smoke_test.py --base-url http://127.0.0.1:8000
+
+bonus-demo:
+	$(VENV)/bin/python scripts/bonus_demo.py

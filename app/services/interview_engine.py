@@ -23,7 +23,12 @@ class EvaluationResult:
 
 
 class InterviewEngine:
-    def __init__(self, repository: Repository, prompt_store: PromptStore, llm_backend: LLMBackend):
+    def __init__(
+        self,
+        repository: Repository,
+        prompt_store: PromptStore,
+        llm_backend: LLMBackend,
+    ):
         self.repository = repository
         self.prompt_store = prompt_store
         self.llm_backend = llm_backend
@@ -185,7 +190,7 @@ class InterviewEngine:
         try:
             result = self.llm_backend.complete(system_prompt, user_prompt)
             data = json.loads(result.content)
-            return EvaluationResult(
+            evaluation = EvaluationResult(
                 verdict=data["verdict"],
                 score=int(data["score"]),
                 reasoning=data["reasoning"],
@@ -194,6 +199,7 @@ class InterviewEngine:
                 backend=result.backend,
                 used_fallback=False,
             )
+            return evaluation
         except Exception as exc:
             log_event("evaluation_fallback_used", error=str(exc), question_id=question["id"])
             return EvaluationResult(
