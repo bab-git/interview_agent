@@ -1,0 +1,95 @@
+version: v1
+description: Baseline interviewer prompt with concise clarifications and practical evaluation criteria.
+welcome_template: "Welcome to the interview. I will focus on {skill}, ask three questions, and may ask one short clarification before moving on."
+wrap_up_template: "Thanks for completing the {skill} interview. We have reached the end of the three-question loop."
+evaluation:
+  system_prompt: |
+    You are evaluating a technical interview answer.
+    Return strict JSON with these keys:
+    verdict: "complete" or "clarify"
+    score: integer from 1 to 5
+    reasoning: short string
+    missing_points: array of strings
+    follow_up: string or null
+    Use "clarify" when the answer is vague, ambiguous, or does not explain decisions and outcomes.
+clarification:
+  max_attempts: 1
+skills:
+  Problem Solving:
+    questions:
+      - id: ps1
+        prompt: "Tell me about a technically difficult problem you solved recently. What made it hard?"
+        evaluation_focus:
+          - context
+          - constraints
+          - decision process
+          - outcome
+        fallback_probe: "Walk me through the constraints, the options you considered, and how you validated the result."
+      - id: ps2
+        prompt: "Describe a time when your first approach did not work. How did you recover?"
+        evaluation_focus:
+          - failure signal
+          - debugging process
+          - adaptation
+          - learning
+        fallback_probe: "What sign told you the first approach was failing, and what changed in your second attempt?"
+      - id: ps3
+        prompt: "How do you balance speed and correctness when solving urgent production issues?"
+        evaluation_focus:
+          - prioritization
+          - risk management
+          - communication
+          - validation
+        fallback_probe: "Explain how you reduce risk while still moving quickly, and how you confirm the fix worked."
+  Communication:
+    questions:
+      - id: comm1
+        prompt: "Describe a time you had to explain a complex technical topic to a non-technical audience."
+        evaluation_focus:
+          - audience adaptation
+          - clarity
+          - feedback loop
+          - outcome
+        fallback_probe: "How did you adjust your explanation for that audience, and how did you check they understood?"
+      - id: comm2
+        prompt: "Tell me about a disagreement where clear communication changed the outcome."
+        evaluation_focus:
+          - context
+          - listening
+          - framing
+          - resolution
+        fallback_probe: "What did you say differently, and how did you know the conversation was improving?"
+      - id: comm3
+        prompt: "When delivering difficult feedback, what approach do you take?"
+        evaluation_focus:
+          - preparation
+          - empathy
+          - specificity
+          - follow-through
+        fallback_probe: "How do you keep the feedback specific and constructive, and what happens after the conversation?"
+  Collaboration & Teamwork:
+    questions:
+      - id: collab1
+        prompt: "Tell me about a project where you had to coordinate closely with people from different functions."
+        evaluation_focus:
+          - alignment
+          - collaboration style
+          - conflict handling
+          - outcome
+        fallback_probe: "How did you keep the group aligned when priorities or language differed across functions?"
+      - id: collab2
+        prompt: "Describe a situation where you helped an underperforming or blocked teammate."
+        evaluation_focus:
+          - diagnosis
+          - support approach
+          - accountability
+          - result
+        fallback_probe: "How did you support them without taking over the work, and what changed afterward?"
+      - id: collab3
+        prompt: "What does strong team ownership look like during an incident or deadline crunch?"
+        evaluation_focus:
+          - responsibility sharing
+          - communication
+          - escalation
+          - retrospection
+        fallback_probe: "How do you divide ownership under pressure and make sure the team learns afterward?"
