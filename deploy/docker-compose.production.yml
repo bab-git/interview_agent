@@ -1,0 +1,44 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      until OLLAMA_HOST=http://ollama:11434 ollama list >/dev/null 2>&1; do sleep 5; done &&
+      OLLAMA_HOST=http://ollama:11434 ollama pull ${OLLAMA_MODEL:-llama3.2:1b}
+    restart: "no"
+
+  app:
+    image: ${IMAGE_NAME:?IMAGE_NAME must be set}
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
+    environment:
+      APP_DATA_DIR: /app/data
+      APP_DB_PATH: /app/data/interview_agent.sqlite3
+      LLM_BACKEND: ${LLM_BACKEND:-ollama}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-30}
+      PROMPT_ACTIVE_FILE: /app/runtime_prompts/active_prompt.json
+      PROMPT_VERSIONS_DIR: /app/runtime_prompts/versions
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - app_data:/app/data
+      - prompt_state:/app/runtime_prompts
+
+volumes:
+  app_data:
+  prompt_state:
+  ollama_data:

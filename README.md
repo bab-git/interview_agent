@@ -2,6 +2,8 @@
 
 This repository contains a complete take-home solution for a production conversational interview agent with a human feedback loop and prompt versioning. The system exposes a deployable FastAPI API, persists interview conversations and evaluator feedback in SQLite, supports prompt activation for future interviews, and includes automated tests plus reviewer demo scripts.
 
+A browser-based Gradio test UI is also available at `/ui`, so reviewers can run the interview loop, inspect state transitions, and submit evaluator feedback without using `curl`.
+
 ## Contents
 
 - [Assignment Coverage](#assignment-coverage)
@@ -11,14 +13,16 @@ This repository contains a complete take-home solution for a production conversa
 - [Setup](#setup)
 - [Running the Service](#running-the-service)
 - [Visual Inspection](#visual-inspection)
+- [Gradio Live UI](#gradio-live-ui)
 - [API Walkthrough](#api-walkthrough)
+- [Closing the Loop Workflow](#closing-the-loop-workflow)
 - [Reviewer Demo](#reviewer-demo)
 - [Prompt Update Path](#prompt-update-path)
 - [Testing](#testing)
 - [Endpoints](#endpoints)
 - [Resilience Notes](#resilience-notes)
 - [What a Reviewer Can Quickly Verify](#what-a-reviewer-can-quickly-verify)
-- [GitHub Setup Notes](#github-setup-notes)
+- [GitHub Actions Pipeline](#github-actions-pipeline)
 - [Notes](#notes)
 
 Bonus features are also implemented locally in this branch:
@@ -27,7 +31,7 @@ Bonus features are also implemented locally in this branch:
 - feedback aggregation across conversations
 - prompt update API for creating new prompt versions
 - automated prompt-improvement suggestions from evaluator feedback
-- a GitHub Actions CI workflow file that can be used if the repo is pushed to GitHub
+- a GitHub Actions pipeline that runs CI, publishes container images, and includes an optional deployment stage
 
 The implementation is intentionally built around an explicit interview state machine rather than a single LLM call. Each interview follows:
 
@@ -119,10 +123,10 @@ The implementation is intentionally built around an explicit interview state mac
    The API returns aggregate averages, common flags, and grouped summaries by skill and prompt version.
    Verified by [tests/test_bonus_features.py](tests/test_bonus_features.py).
 
-3. CI/CD pipeline scaffold
+3. CI pipeline plus optional CD scaffold
    Covered by [ci.yml](.github/workflows/ci.yml).
-   The workflow installs dependencies, runs tests, and builds the Docker image.
-   This can be created locally without GitHub; it only needs GitHub if you want it to execute in GitHub Actions.
+   The workflow runs tests, validates the Docker build, publishes the app image to GHCR, and includes an optional SSH-based deployment stage.
+   The deployment stage is gated behind the `ENABLE_CD=true` repository variable plus the required GitHub secrets, so the repository remains usable without provisioning a real target host.
 
 4. Prompt update API
    Covered by `POST /api/prompts`.
@@ -154,6 +158,7 @@ The implementation is intentionally built around an explicit interview state mac
 ### High-level components
 
 - [app/main.py](app/main.py): API routes and request handling
+- [app/gradio_ui.py](app/gradio_ui.py): mounted Gradio browser UI for live interview testing
 - [app/services/interview_engine.py](app/services/interview_engine.py): interview state machine and evaluation loop
 - [app/services/llm.py](app/services/llm.py): Ollama and mock backends
 - [app/db.py](app/db.py): SQLite persistence layer
@@ -167,6 +172,7 @@ The implementation is intentionally built around an explicit interview state mac
 app/
   config.py
   db.py
+  gradio_ui.py
   logging_utils.py
   main.py
   models.py
@@ -185,6 +191,7 @@ scripts/
   demo_flow.py
   live_smoke_test.py
 tests/
+  test_gradio_ui.py
 Dockerfile
 docker-compose.yml
 Makefile
@@ -195,7 +202,7 @@ requirements.txt
 
 - One prompt version is active for new interviews at a time.
 - Each question allows at most one clarification before the agent moves on.
-- Evaluators primarily need API and script access; a custom frontend is not required.
+- Evaluators can use either the API/scripts or the mounted Gradio UI, depending on whether they want a browser-based workflow.
 - The local-model path is meant for Ollama.
 - Automated tests use the deterministic mock backend for repeatability.
 
@@ -232,6 +239,7 @@ LLM_BACKEND=mock make run
 ```
 
 The API will be available at [http://127.0.0.1:8000](http://127.0.0.1:8000).
+The mounted Gradio UI will be available at [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
 
 ### Option 2: Real local LLM with Ollama
 
@@ -253,6 +261,8 @@ ollama pull llama3.2:1b
 LLM_BACKEND=ollama OLLAMA_MODEL=llama3.2:1b make run
 ```
 
+Then open [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui) for the live browser UI.
+
 ### Option 3: Containerized stack
 
 If Docker is available:
@@ -271,12 +281,106 @@ This starts:
 
 Once the service is running, open:
 
+- [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
-These pages let a reviewer interact with the API visually and inspect request and response payloads.
+The Gradio page gives you a browser-based live test harness for the interview pipeline. The FastAPI docs pages let a reviewer inspect and call the raw API directly.
 
-The bonus endpoints also appear there, so you can inspect comparison, summary, and prompt-suggestion responses visually.
+The bonus endpoints also appear in the API docs, so you can inspect comparison, summary, and prompt-suggestion responses visually.
+
+## Gradio Live UI
+
+The mounted Gradio UI at [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui) is the fastest way to live-test the interview pipeline end to end.
+
+It includes:
+
+- a chat-style interview runner for starting an interview and replying turn by turn
+- a live state panel showing phase, question index, clarifications used, prompt version, and backend
+- a latest-evaluation panel showing verdict, score, follow-up, and fallback usage
+- a full transcript panel including evaluation messages
+- a reviewer workbench for loading completed conversations and submitting feedback without leaving the browser
+
+### Step-by-step live UI test
+
+1. Install dependencies:
+
+```bash
+make install
+```
+
+2. Start the service in deterministic mock mode:
+
+```bash
+LLM_BACKEND=mock make run
+```
+
+3. Open the UI:
+
+- [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
+
+4. In the `Live Interview` tab:
+
+- optionally enter a candidate name
+- choose one of the supported skills
+- click `Start Interview`
+
+5. Confirm the initial interview state:
+
+- the chat shows the welcome message and first question
+- `Current Interview ID` is populated
+- the right-side state panel shows the interview as `active`
+
+6. Trigger the clarification branch:
+
+- send a short answer such as `I fixed an outage quickly.`
+- confirm the chat shows a clarification prompt
+- confirm the latest evaluation panel shows verdict `clarify`
+
+7. Continue the interview:
+
+- reply with a more complete answer containing context, decision process, and outcome
+- confirm the next question appears
+- repeat until all 3 questions are completed
+
+8. Confirm completion:
+
+- the wrap-up message appears in chat
+- the state panel shows `completed`
+- the completion timestamp is populated
+
+9. Test interview reload:
+
+- copy the interview ID
+- refresh the page
+- paste the ID into `Load Interview By ID`
+- click `Load`
+- confirm the transcript and state reload correctly
+
+10. Test the reviewer flow:
+
+- open the `Reviewer Workbench` tab
+- click `Refresh Interviews`
+- select the completed interview from the dropdown
+- confirm the conversation replay and transcript load
+
+11. Submit evaluator feedback:
+
+- enter an optional evaluator ID
+- choose quality, fairness, and relevance scores
+- optionally add flags and notes
+- click `Submit Feedback`
+
+12. Confirm feedback persistence:
+
+- a success message appears
+- the feedback summary panel updates
+- the prompt suggestion panel updates
+
+13. Optional API cross-check:
+
+- open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- call `GET /api/interviews/{interview_id}` using the same interview ID
+- verify the stored conversation matches the UI transcript
 
 ## API Walkthrough
 
@@ -410,6 +514,56 @@ curl -s http://127.0.0.1:8000/health
 curl -s http://127.0.0.1:8000/api/metrics
 ```
 
+## Closing the Loop Workflow
+
+The assignment asks for more than collecting feedback. A reviewer should be able to inspect a finished conversation, record evaluation feedback, use that feedback to update prompts, and then confirm that new interviews pick up the change.
+
+This repository supports that full loop over HTTP:
+
+1. Run and complete an interview
+
+   Start an interview with `POST /api/interviews`, answer all 3 questions through `POST /api/interviews/{interview_id}/reply`, and keep the returned `interview_id`.
+
+2. Retrieve the completed conversation
+
+   Use `GET /api/interviews/{interview_id}` to inspect the stored transcript, evaluation messages, selected skill, and recorded `prompt_version`.
+
+3. Submit evaluator feedback
+
+   Use `POST /api/feedback` to persist reviewer scores, issue flags, and notes for that completed conversation.
+
+4. Review the accumulated evaluator signal
+
+   Use `GET /api/interviews/{interview_id}/feedback` to inspect feedback for one conversation.
+   Use `GET /api/feedback/summary` to see aggregate quality/fairness/relevance and common flags across conversations.
+   Use `GET /api/prompts/suggestions` to generate prompt-improvement suggestions from stored evaluator feedback.
+
+5. Create or activate an updated prompt version
+
+   Use `POST /api/prompts` to create a new prompt version derived from an existing one, or update a prompt file under [prompts/versions](prompts/versions) and activate it with `POST /api/prompts/activate`.
+
+6. Run a new interview and verify the prompt change is live
+
+   Start another interview with `POST /api/interviews` and confirm the response now shows the new `prompt_version`.
+   This provides a traceable link between evaluator feedback, prompt changes, and the next generation of interviews.
+
+If you want the fastest proof of this end-to-end loop, run:
+
+```bash
+make install
+make demo
+```
+
+[scripts/demo_flow.py](scripts/demo_flow.py) demonstrates the full sequence in one pass:
+
+- start interview
+- trigger clarification
+- complete interview
+- retrieve conversation
+- submit feedback
+- activate updated prompt
+- start a new interview that records the new prompt version
+
 ## Reviewer Demo
 
 ### Fastest guided walkthrough
@@ -536,16 +690,73 @@ make smoke
 5. Prompt versions are configurable and recorded per conversation.
 6. The system includes tests, a demo script, health checks, and metrics.
 
-## GitHub Setup Notes
+## GitHub Actions Pipeline
 
-All bonus features implemented in this branch work locally without a GitHub account.
+All required assignment features still work locally without GitHub. The GitHub-specific addition is an optional Actions pipeline in [ci.yml](.github/workflows/ci.yml).
 
-The only GitHub-related addition is the workflow file at [ci.yml](.github/workflows/ci.yml). For that file:
+### What the workflow now does
 
-- No GitHub-side secrets are required for the current workflow.
-- If you push this repository to GitHub, Actions should be enough to run the workflow.
-- If GitHub Actions is disabled for the repository, you would need to enable Actions in the repo settings.
-- If you later want image publishing or real deployment, that would require additional GitHub-side configuration or secrets, but the current local bonus work does not depend on that.
+On every push or pull request, GitHub Actions will:
+
+- install dependencies
+- run the test suite
+- validate that the Docker image builds successfully
+
+On pushes, GitHub Actions will also:
+
+- publish the image to GitHub Container Registry as `ghcr.io/<owner>/<repo>:<sha>`
+- tag `ghcr.io/<owner>/<repo>:latest` on `main`
+
+On pushes to `main`, GitHub Actions can additionally run the optional deploy stage if CD is enabled:
+
+- copy [docker-compose.production.yml](deploy/docker-compose.production.yml) to the target server
+- write a deployment env file with the exact image tag being released
+- pull the published image from GHCR
+- restart the production stack with Docker Compose
+- verify the deployment through `GET /health`
+
+### What you would need to enable CD
+
+Repository variable:
+
+- `ENABLE_CD=true`
+- optional `DEPLOY_PATH` default is `/opt/production-interview-agent`
+- optional `APP_PORT` default is `8000`
+- optional `LLM_BACKEND` default is `ollama`
+- optional `OLLAMA_MODEL` default is `llama3.2:1b`
+- optional `REQUEST_TIMEOUT_SECONDS` default is `30`
+
+Repository secrets:
+
+- `DEPLOY_HOST`: hostname or IP of the Docker server
+- `DEPLOY_USER`: SSH user on the target host
+- `DEPLOY_SSH_KEY`: private key for that host
+- `GHCR_USERNAME`: GitHub username that can read the package
+- `GHCR_TOKEN`: GitHub token or PAT with package read access on the target host
+
+Target host prerequisites:
+
+- Docker with the Compose plugin installed
+- `curl` available for the post-deploy health check
+- network access to pull images from `ghcr.io`
+
+### Optional deployment model
+
+If you choose to enable the deploy stage later, it uses [docker-compose.production.yml](deploy/docker-compose.production.yml), which starts:
+
+- the interview app from the GHCR-published image
+- an Ollama container
+- a one-time model pull job for `llama3.2:1b`
+
+The production stack persists:
+
+- SQLite interview and feedback data in a Docker volume
+- prompt versions and the active prompt selection in a Docker volume
+- Ollama model data in a Docker volume
+
+The container entrypoint seeds the prompt volume from the bundled prompt files on first boot, so prompt versioning continues to work after redeploys.
+
+At the moment, this repository includes the deployment automation and documentation, but it does not assume that a live target host has been provisioned for review.
 
 ## Notes
 
