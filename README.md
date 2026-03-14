@@ -2,6 +2,8 @@
 
 This repository contains a complete take-home solution for a production conversational interview agent with a human feedback loop and prompt versioning. The system exposes a deployable FastAPI API, persists interview conversations and evaluator feedback in SQLite, supports prompt activation for future interviews, and includes automated tests plus reviewer demo scripts.
 
+A browser-based Gradio test UI is also available at `/ui`, so reviewers can run the interview loop, inspect state transitions, and submit evaluator feedback without using `curl`.
+
 ## Contents
 
 - [Assignment Coverage](#assignment-coverage)
@@ -11,6 +13,7 @@ This repository contains a complete take-home solution for a production conversa
 - [Setup](#setup)
 - [Running the Service](#running-the-service)
 - [Visual Inspection](#visual-inspection)
+- [Gradio Live UI](#gradio-live-ui)
 - [API Walkthrough](#api-walkthrough)
 - [Reviewer Demo](#reviewer-demo)
 - [Prompt Update Path](#prompt-update-path)
@@ -154,6 +157,7 @@ The implementation is intentionally built around an explicit interview state mac
 ### High-level components
 
 - [app/main.py](app/main.py): API routes and request handling
+- [app/gradio_ui.py](app/gradio_ui.py): mounted Gradio browser UI for live interview testing
 - [app/services/interview_engine.py](app/services/interview_engine.py): interview state machine and evaluation loop
 - [app/services/llm.py](app/services/llm.py): Ollama and mock backends
 - [app/db.py](app/db.py): SQLite persistence layer
@@ -167,6 +171,7 @@ The implementation is intentionally built around an explicit interview state mac
 app/
   config.py
   db.py
+  gradio_ui.py
   logging_utils.py
   main.py
   models.py
@@ -185,6 +190,7 @@ scripts/
   demo_flow.py
   live_smoke_test.py
 tests/
+  test_gradio_ui.py
 Dockerfile
 docker-compose.yml
 Makefile
@@ -195,7 +201,7 @@ requirements.txt
 
 - One prompt version is active for new interviews at a time.
 - Each question allows at most one clarification before the agent moves on.
-- Evaluators primarily need API and script access; a custom frontend is not required.
+- Evaluators can use either the API/scripts or the mounted Gradio UI, depending on whether they want a browser-based workflow.
 - The local-model path is meant for Ollama.
 - Automated tests use the deterministic mock backend for repeatability.
 
@@ -232,6 +238,7 @@ LLM_BACKEND=mock make run
 ```
 
 The API will be available at [http://127.0.0.1:8000](http://127.0.0.1:8000).
+The mounted Gradio UI will be available at [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui).
 
 ### Option 2: Real local LLM with Ollama
 
@@ -253,6 +260,8 @@ ollama pull llama3.2:1b
 LLM_BACKEND=ollama OLLAMA_MODEL=llama3.2:1b make run
 ```
 
+Then open [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui) for the live browser UI.
+
 ### Option 3: Containerized stack
 
 If Docker is available:
@@ -271,12 +280,106 @@ This starts:
 
 Once the service is running, open:
 
+- [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
-These pages let a reviewer interact with the API visually and inspect request and response payloads.
+The Gradio page gives you a browser-based live test harness for the interview pipeline. The FastAPI docs pages let a reviewer inspect and call the raw API directly.
 
-The bonus endpoints also appear there, so you can inspect comparison, summary, and prompt-suggestion responses visually.
+The bonus endpoints also appear in the API docs, so you can inspect comparison, summary, and prompt-suggestion responses visually.
+
+## Gradio Live UI
+
+The mounted Gradio UI at [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui) is the fastest way to live-test the interview pipeline end to end.
+
+It includes:
+
+- a chat-style interview runner for starting an interview and replying turn by turn
+- a live state panel showing phase, question index, clarifications used, prompt version, and backend
+- a latest-evaluation panel showing verdict, score, follow-up, and fallback usage
+- a full transcript panel including evaluation messages
+- a reviewer workbench for loading completed conversations and submitting feedback without leaving the browser
+
+### Step-by-step live UI test
+
+1. Install dependencies:
+
+```bash
+make install
+```
+
+2. Start the service in deterministic mock mode:
+
+```bash
+LLM_BACKEND=mock make run
+```
+
+3. Open the UI:
+
+- [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui)
+
+4. In the `Live Interview` tab:
+
+- optionally enter a candidate name
+- choose one of the supported skills
+- click `Start Interview`
+
+5. Confirm the initial interview state:
+
+- the chat shows the welcome message and first question
+- `Current Interview ID` is populated
+- the right-side state panel shows the interview as `active`
+
+6. Trigger the clarification branch:
+
+- send a short answer such as `I fixed an outage quickly.`
+- confirm the chat shows a clarification prompt
+- confirm the latest evaluation panel shows verdict `clarify`
+
+7. Continue the interview:
+
+- reply with a more complete answer containing context, decision process, and outcome
+- confirm the next question appears
+- repeat until all 3 questions are completed
+
+8. Confirm completion:
+
+- the wrap-up message appears in chat
+- the state panel shows `completed`
+- the completion timestamp is populated
+
+9. Test interview reload:
+
+- copy the interview ID
+- refresh the page
+- paste the ID into `Load Interview By ID`
+- click `Load`
+- confirm the transcript and state reload correctly
+
+10. Test the reviewer flow:
+
+- open the `Reviewer Workbench` tab
+- click `Refresh Interviews`
+- select the completed interview from the dropdown
+- confirm the conversation replay and transcript load
+
+11. Submit evaluator feedback:
+
+- enter an optional evaluator ID
+- choose quality, fairness, and relevance scores
+- optionally add flags and notes
+- click `Submit Feedback`
+
+12. Confirm feedback persistence:
+
+- a success message appears
+- the feedback summary panel updates
+- the prompt suggestion panel updates
+
+13. Optional API cross-check:
+
+- open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- call `GET /api/interviews/{interview_id}` using the same interview ID
+- verify the stored conversation matches the UI transcript
 
 ## API Walkthrough
 

@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from app.config import settings
 from app.db import Repository
-from app.logging_utils import configure_logging
+from app.logging_utils import configure_logging, log_event
 from app.prompts import PromptStore
 from app.schemas import (
     ActivatePromptRequest,
@@ -50,6 +50,11 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Production Interview Agent", version="1.0.0", lifespan=lifespan)
+
+try:
+    from app.gradio_ui import mount_gradio_ui
+except ImportError:
+    mount_gradio_ui = None
 
 
 def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -341,3 +346,12 @@ def prompt_suggestions(
 ) -> List[PromptSuggestionResponse]:
     suggestions = review_analytics.prompt_suggestions(skill=skill, prompt_version=prompt_version)
     return [PromptSuggestionResponse(**item) for item in suggestions]
+
+
+if mount_gradio_ui is None:
+    log_event("gradio_ui_disabled", reason="gradio_not_installed")
+else:
+    try:
+        app = mount_gradio_ui(app, engine, prompt_store, review_analytics)
+    except Exception as exc:
+        log_event("gradio_ui_disabled", reason="mount_failed", error=str(exc))
