@@ -8,6 +8,7 @@ A browser-based Gradio test UI is also available at `/ui`, so reviewers can run 
 
 - [Assignment Coverage](#assignment-coverage)
 - [Architecture](#architecture)
+- [Agentic Pipeline](#agentic-pipeline)
 - [Project Structure](#project-structure)
 - [Assumptions](#assumptions)
 - [Setup](#setup)
@@ -148,6 +149,47 @@ The implementation is intentionally built around an explicit interview state mac
 - FastAPI provides a deployable interface and auto-generated API documentation at `/docs`.
 - Local LLM support is implemented with Ollama in [app/services/llm.py](app/services/llm.py). The default model is `llama3.2:1b`, which is small enough for modest local hardware.
 - A deterministic `mock` backend is included for tests and reviewer verification, so the system can be validated even when a local model is not running.
+
+### Agentic Pipeline
+
+This system is intentionally not a single prompt-response chain. Each interview turn moves through an explicit agentic pipeline with persisted state, evaluation, branching, and recovery behavior.
+
+For one interview session, the runtime pipeline is:
+
+1. The client starts an interview for one selected skill through the API.
+2. The service loads the active prompt version and selects the 3 configured questions for that skill.
+3. The interview engine creates persisted interview state, records the prompt version in use, stores a welcome message, and asks question 1.
+4. Each candidate reply is stored before any evaluation happens.
+5. The evaluator step runs on that reply using the current prompt instructions and returns a verdict, score, reasoning, missing points, and an optional follow-up prompt.
+6. If the answer is incomplete or ambiguous and clarification budget remains, the engine transitions to a clarification phase and asks a targeted follow-up.
+7. If the answer is sufficient, the engine advances to the next question and resets clarification state for that question.
+8. After question 3 is complete, the engine stores the wrap-up message, marks the interview completed, and keeps the full transcript available for review.
+9. Reviewers can then retrieve the stored conversation, submit ratings and flags, and use that signal to improve future prompt versions.
+
+Operational notes:
+
+- The interview state machine tracks `status`, `phase`, `current_question_index`, and `clarification_count`.
+- Every question follows the same loop: `ask -> answer -> evaluate -> clarify or advance`.
+- If the LLM evaluator is unavailable or returns invalid output, the system falls back to a heuristic evaluator so the interview can continue instead of failing mid-session.
+
+```mermaid
+flowchart TD
+    A["Client starts interview"] --> B["API validates request and selects one skill"]
+    B --> C["PromptStore loads active prompt version"]
+    C --> D["InterviewEngine selects 3 questions and creates persisted interview state"]
+    D --> E["Repository stores welcome message and question 1"]
+    E --> F["Candidate submits an answer"]
+    F --> G["Repository stores candidate answer"]
+    G --> H["Evaluator scores the answer and decides whether to clarify or continue"]
+    H --> I{"Need clarification and attempts remaining?"}
+    I -- "Yes" --> J["Store evaluation metadata and ask clarification"]
+    J --> F
+    I -- "No" --> K{"More questions remaining?"}
+    K -- "Yes" --> L["Advance question index, reset clarification count, and ask next question"]
+    L --> F
+    K -- "No" --> M["Store wrap-up message, mark interview completed, and persist transcript"]
+    M --> N["Conversation becomes available for reviewer feedback, summaries, and prompt updates"]
+```
 
 ### Supported skills
 
