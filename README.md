@@ -4,6 +4,10 @@ This repository contains a complete take-home solution for a production conversa
 
 A browser-based Gradio test UI is also available at `/ui`, so reviewers can run the interview loop, inspect state transitions, and submit evaluator feedback without using `curl`.
 
+
+![Interview Agent UI](assets/ui.png)
+
+
 ## Contents
 
 - [Assignment Coverage](#assignment-coverage)
