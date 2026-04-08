@@ -1,0 +1,95 @@
+version: v2
+description: Updated prompt that pushes for evidence, measurable outcomes, and explicit reflection.
+welcome_template: "Welcome. This interview focuses on {skill}. I will ask three questions and look for concrete examples, decision points, and measurable outcomes."
+wrap_up_template: "Thanks for finishing the {skill} interview. Your responses have been recorded with the current prompt version."
+evaluation:
+  system_prompt: |
+    You are evaluating a technical interview answer.
+    Return strict JSON with these keys:
+    verdict: "complete" or "clarify"
+    score: integer from 1 to 5
+    reasoning: short string
+    missing_points: array of strings
+    follow_up: string or null
+    Prefer "clarify" when the answer lacks evidence, reflection, or a clear result.
+clarification:
+  max_attempts: 1
+skills:
+  Problem Solving:
+    questions:
+      - id: ps1
+        prompt: "Tell me about a technically difficult problem you solved recently. What made it hard, and what trade-offs did you weigh?"
+        evaluation_focus:
+          - context
+          - trade-offs
+          - decision process
+          - measurable result
+        fallback_probe: "What trade-offs were on the table, why did you choose your final path, and what result proved it worked?"
+      - id: ps2
+        prompt: "Describe a time when your first approach did not work. How did you recover, and what did you learn?"
+        evaluation_focus:
+          - failure signal
+          - debugging process
+          - adaptation
+          - reflection
+        fallback_probe: "What evidence showed the original plan was wrong, what changed next, and what lesson stuck with you?"
+      - id: ps3
+        prompt: "How do you balance speed and correctness when solving urgent production issues? Use a real example."
+        evaluation_focus:
+          - prioritization
+          - risk management
+          - communication
+          - validation
+        fallback_probe: "In a concrete incident, how did you move fast, lower risk, and verify the system was stable afterward?"
+  Communication:
+    questions:
+      - id: comm1
+        prompt: "Describe a time you had to explain a complex technical topic to a non-technical audience. What changed after your explanation?"
+        evaluation_focus:
+          - audience adaptation
+          - clarity
+          - feedback loop
+          - measurable outcome
+        fallback_probe: "How did you tailor the explanation, how did you confirm understanding, and what happened next?"
+      - id: comm2
+        prompt: "Tell me about a disagreement where clear communication changed the outcome. What specific tactic helped most?"
+        evaluation_focus:
+          - context
+          - listening
+          - framing
+          - resolution
+        fallback_probe: "What communication tactic shifted the conversation, and what evidence showed it was working?"
+      - id: comm3
+        prompt: "When delivering difficult feedback, what approach do you take? Give a recent example."
+        evaluation_focus:
+          - preparation
+          - empathy
+          - specificity
+          - follow-through
+        fallback_probe: "What made the feedback actionable, and how did you follow up to improve the outcome?"
+  Collaboration & Teamwork:
+    questions:
+      - id: collab1
+        prompt: "Tell me about a project where you had to coordinate closely with people from different functions. How did you keep everyone aligned?"
+        evaluation_focus:
+          - alignment
+          - collaboration style
+          - conflict handling
+          - outcome
+        fallback_probe: "What mechanisms kept the team aligned, and how did you respond when priorities conflicted?"
+      - id: collab2
+        prompt: "Describe a situation where you helped an underperforming or blocked teammate. What boundary did you maintain?"
+        evaluation_focus:
+          - diagnosis
+          - support approach
+          - accountability
+          - result
+        fallback_probe: "How did you support them while preserving ownership, and what changed after your intervention?"
+      - id: collab3
+        prompt: "What does strong team ownership look like during an incident or deadline crunch? Use a specific case."
+        evaluation_focus:
+          - responsibility sharing
+          - communication
+          - escalation
+          - retrospection
+        fallback_probe: "How were responsibilities divided, when did you escalate, and what team learning followed?"
