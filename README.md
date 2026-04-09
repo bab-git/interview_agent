@@ -4,6 +4,9 @@
 
 This project is a production-style prototype for orchestrating AI-led interviews with explicit conversation state, evaluator feedback persistence, prompt versioning, and human review support. The focus is not autonomous hiring decisions, but making conversational evaluation workflows more controllable, inspectable, and replayable.
 
+![AI Interview Orchestration Prototype hero screenshot](docs/assets/ui.png)
+
+
 ## What it demonstrates
 
 - explicit state transitions instead of freeform agent drift
@@ -61,6 +64,13 @@ tests/            Workflow, API, UI, feedback, and prompt-governance coverage
 - It is not intended for autonomous candidate judgment.
 - Fairness, psychometric validity, and production-grade security are out of scope.
 - Prompt-improvement features are assistive and exploratory.
+
+## Documentation
+- [Case study](docs/case-study.md)
+- [Architecture notes](docs/architecture.md)
+- [Demo script](docs/demo-script.md)
+
+
 
 ## Case study link
 
